@@ -1,0 +1,213 @@
+<head>
+  <title>IBC Tool</title>
+</head>
+<body>
+  <fieldset>
+    <legend>Relayer Info</legend>
+
+    <!-- from Brendan 10 Oct -->
+    <textarea name="relayerInfo" cols="80" rows="8">
+    {
+      "persistence": {
+        "chain_id": "agoric-3",
+        "channel_id": "channel-72",
+        "client_id": null,
+        "counterparty": {
+          "chain_id": "core-1",
+          "channel_id": "channel-202",
+          "port_id": "transfer"
+        },
+        "ordering": "ORDER_UNORDERED",
+        "port_id": "transfer",
+        "state": "STATE_OPEN",
+        "version": "ics20-1"
+      },
+      "stride": {
+        "chain_id": "agoric-3",
+        "channel_id": "channel-59",
+        "client_id": null,
+        "counterparty": {
+          "chain_id": "stride-1",
+          "channel_id": "channel-148",
+          "port_id": "transfer"
+        },
+        "ordering": "ORDER_UNORDERED",
+        "port_id": "transfer",
+        "state": "STATE_OPEN",
+        "version": "ics20-1"
+      },
+      "noble": {
+        "chain_id": "agoric-3",
+        "channel_id": "channel-62",
+        "client_id": "07-tendermint-77",
+        "connection_hops": [
+          "connection-72"
+        ],
+        "counterparty": {
+          "chain_id": "noble-1",
+          "channel_id": "channel-21",
+          "client_id": "07-tendermint-32",
+          "connection_id": "connection-38",
+          "port_id": "transfer"
+        },
+        "ordering": "ORDER_UNORDERED",
+        "port_id": "transfer",
+        "state": "STATE_OPEN",
+        "version": "ics20-1"
+      },
+      "kava": {
+        "chain_id": "agoric-3",
+        "channel_id": "channel-63",
+        "client_id": "07-tendermint-78",
+        "connection_hops": [
+          "connection-73"
+        ],
+        "counterparty": {
+          "chain_id": "kava_2222-10",
+          "channel_id": "channel-133",
+          "client_id": "07-tendermint-147",
+          "connection_id": "connection-182",
+          "port_id": "transfer"
+        },
+        "ordering": "ORDER_UNORDERED",
+        "port_id": "transfer",
+        "state": "STATE_OPEN",
+        "version": "ics20-1"
+      },
+      "neutron": {
+        "chain_id": "agoric-3",
+        "channel_id": "channel-146",
+        "client_id": null,
+        "counterparty": {
+          "chain_id": "neutron-1",
+          "channel_id": "channel-5789",
+          "port_id": "transfer"
+        },
+        "ordering": "ORDER_UNORDERED",
+        "port_id": "transfer",
+        "state": "STATE_OPEN",
+        "version": "ics20-1"
+      }
+    }
+    </textarea>
+  </fieldset>
+  <fieldset>
+    <legend>IBC Channel</legend>
+    <label>
+      Source Chain:
+      <select name="srcChain" onchange="setChain()">
+        <option></option>
+        <option value="persistence">persistence</option>
+        <option value="stride">stride</option>
+        <option value="noble">noble</option>
+        <option value="kava">kava</option>
+        <option value="neutron">neutron</option>
+        <option value="agoric">agoric</option>
+      </select>
+    </label>
+    <br />
+    <label
+      >Source channel:
+      <select name="srcChannel"></select
+    ></label>
+    <br />
+    <label>
+      Source API node:
+      <select name="srcAPI"></select>
+    </label>
+    <br />
+    <label>
+      Source RPC node:
+      <select name="srcRpc"></select>
+    </label>
+  </fieldset>
+  <fieldset>
+    <legend>IBC Transfer</legend>
+    <br />
+    <button type="button" onclick="connect()">Connect Wallet</button>
+    <br />
+    <label>Account: <input name="account" readonly/></label>
+    <br />
+    <label>
+      Balance:
+      <select name="balance"></select>
+    </label>
+    <br />
+    <label>Amount: <input name="amount" type="number" min="0"/></label>
+    <label>To: <input name="to"/></label>
+    <label>Gas: <input name="gas" type="number" min="0" value="150000"/></label>
+    <button type="button" onclick="send()">Send To Agoric</button>
+    <hr />
+    <textarea name="result" readonly cols="80" rows="20"></textarea>
+  </fieldset>
+
+  <script type="module">
+    import { makeTool, fail, makeDocTools, mapValues } from './inter-send.js';
+
+    const { $, $in, errorBoundary, elt, setChoices } = makeDocTools(document);
+
+    const tool = makeTool({ fetch, keplr });
+
+    const setChain = errorBoundary(async () => {
+      const chain = $in('srcChain').value;
+      console.log({ chain });
+      const relayerInfo = JSON.parse($in('relayerInfo').value);
+      switch (chain) {
+        case 'agoric': {
+          const choices = Object.entries(relayerInfo).map(
+            ([chain, { channel_id: channel }]) => ({
+              channel,
+              label: `${chain}: ${channel}`,
+            }),
+          );
+          console.log('agoric choices', choices);
+          setChoices($in('srcChannel'), choices, 'label', 'chain');
+          break;
+        }
+        default: {
+          const {
+            counterparty: { channel_id: channel },
+          } = relayerInfo[chain];
+          setChoices($in('srcChannel'), [{ channel }], 'channel', 'channel');
+        }
+      }
+      const info = await tool.pickChain(chain);
+      const {
+        apis: { rpc, rest },
+      } = info;
+      setChoices($in('srcAPI'), rest, 'provider', 'address');
+      setChoices($in('srcRpc'), rpc, 'provider', 'address');
+    });
+
+    const connect = errorBoundary(async () => {
+      const account = await tool.connect();
+      console.log({ account });
+      $in('account').value = account.address;
+      const { balances } = await tool.getBalances($in('srcAPI').value);
+      console.log({ balances });
+      const choices = balances.map(({ denom, amount }) => ({
+        denom,
+        label: `${amount} ${denom}`,
+      }));
+      setChoices($in('balance'), choices, 'label', 'denom');
+    });
+
+    const bigIntReplacer = (k, v) => typeof v === 'bigint' ? `${v}`: v;
+
+    const send = errorBoundary(async () => {
+      const fields = {
+        srcRpc: $in('srcRpc').value,
+        srcChannel: $in('srcChannel').value,
+        amount: $in('amount').value,
+        to: $in('to').value,
+        denom: $in('balance').value,
+        gas: $in('gas').value,
+      };
+      const result = await tool.send(fields);
+      $('textarea[name="result"]').value = JSON.stringify(result, bigIntReplacer);
+    });
+
+    // "export"
+    Object.assign(globalThis, { connect, send, setChain });
+  </script>
+</body>
