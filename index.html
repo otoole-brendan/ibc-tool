@@ -134,6 +134,7 @@
     </label>
     <br />
     <label>Amount: <input name="amount" type="number" min="0"/></label>
+    <label>Denom: <input name="denom"/></label>
     <label>To: <input name="to"/></label>
     <label>Gas: <input name="gas" type="number" min="0" value="150000"/></label>
     <button type="button" onclick="send()">Send To Agoric</button>
@@ -200,7 +201,7 @@
         srcChannel: $in('srcChannel').value,
         amount: $in('amount').value,
         to: $in('to').value,
-        denom: $in('balance').value,
+        denom: $in('denom').value||$in('balance').value,
         gas: $in('gas').value,
       };
       const result = await tool.send(fields);
